@@ -27,9 +27,9 @@ class Module(BaseModule):
         regex = '(?:%s)' % ('|'.join(['\.'+re.escape(x)+'$' for x in domains]))
         for ip_address in hosts:
             try:
-                socket.inet_aton(ip)
+                socket.inet_aton(ip_address)
             except socket.error:
-                self.alert('Not an IP: %s' % ip)
+                hosts.extend(socket.gethostbyname_ex(ip_address)[-1])
                 continue
             url = 'https://www.robtex.com/en/advisory/ip/' + ip_address.replace('.', '/') + '/'
             html = self.request(url).text
