@@ -15,5 +15,6 @@ class Module(BaseModule):
             self.heading(domain, level=0)
             resp = self.request('https://crt.sh/?q=%25.{0}&output=json'.format(domain))
             fixed_raw = '[%s]' % resp.raw.replace('}{', '},{')
-            for cert in json.loads(fixed_raw):
-                self.add_hosts(cert.get('name_value'))
+            if resp.status_code == 200:
+                for cert in json.loads(fixed_raw):
+                    self.add_hosts(cert.get('name_value'))
