@@ -85,6 +85,7 @@ class Recon(framework.Framework):
             return True
 
     def _send_analytics(self, cd):
+        return
         try:
             cid_path = os.path.join(self._home, '.cid')
             if not os.path.exists(cid_path):
