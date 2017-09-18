@@ -14,6 +14,9 @@ class Module(BaseModule):
             url = 'https://otx.alienvault.com/api/v1/indicators/hostname/{0}/http_scans'.format(host)
             resp = self.request(url)
             jsonobj = resp.json
+            if jsonobj.has_key('Error'):
+                self.error(jsonobj['Error'])
+                return
             for x in jsonobj['data']:
                 if 'certificate subject' in x['key']:
                     key = x[u'key']
