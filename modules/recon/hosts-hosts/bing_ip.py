@@ -1,4 +1,5 @@
 from recon.core.module import BaseModule
+from recon.utils.parsers import parse_hostname
 from urlparse import urlparse
 import re
 
@@ -8,6 +9,7 @@ class Module(BaseModule):
         'name': 'Bing API IP Neighbor Enumerator',
         'author': 'Tim Tomes (@LaNMaSteR53)',
         'description': 'Leverages the Bing API and "ip:" advanced search operator to enumerate other virtual hosts sharing the same IP address. Updates the \'hosts\' table with the results.',
+        'required_keys': ['bing_api'],
         'comments': (
             'This module only stores hosts whose domain matches an entry in the domains table.',
         ),
@@ -28,8 +30,8 @@ class Module(BaseModule):
             if not results:
                 self.verbose('No additional hosts discovered at \'%s\'.' % (address))
             for result in results:
-                host = urlparse(result['Url']).netloc
-                self.output(host)
+                host = parse_hostname(result['displayUrl'])
+                self.verbose(host)
                 # apply restriction
                 if self.options['restrict'] and not re.search(regex, host):
                     continue

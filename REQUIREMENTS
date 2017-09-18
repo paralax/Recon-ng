@@ -8,3 +8,5 @@ XlsxWriter==0.7.3
 olefile==0.42.1
 PyPDF2==1.25.1
 BeautifulSoup
+flask
+unicodecsv

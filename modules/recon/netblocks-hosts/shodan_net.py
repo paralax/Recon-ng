@@ -7,6 +7,7 @@ class Module(BaseModule):
         'name': 'Shodan Network Enumerator',
         'author': 'Mike Siegel and Tim Tomes (@LaNMaSteR53)',
         'description': 'Harvests hosts from the Shodan API by using the \'net\' search operator. Updates the \'hosts\' table with the results.',
+        'required_keys': ['shodan_api'],
         'query': 'SELECT DISTINCT netblock FROM netblocks WHERE netblock IS NOT NULL',
         'options': (
             ('limit', 1, True, 'limit number of api requests per input source (0 = unlimited)'),
@@ -25,6 +26,5 @@ class Module(BaseModule):
                 if not host['hostnames']:
                     host['hostnames'] = [None]
                 for hostname in host['hostnames']:
-                    self.output('%s (%s) - %s' % (address, hostname or 'Unknown', port))
                     self.add_ports(ip_address=address, port=port, host=hostname)
                     self.add_hosts(host=hostname, ip_address=address)

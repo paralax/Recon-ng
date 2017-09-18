@@ -30,10 +30,15 @@ class GoogleWebMixin(object):
             # detect and handle captchas until answered correctly
             # first visit = 302, actual captcha = 503
             # follow the redirect to the captcha
-            if resp.status_code == 302:
+            count = 0
+            while resp.status_code == 302:
                 redirect = resp.headers['location']
                 # request the captcha page
                 resp = self.request(redirect, redirect=False, cookiejar=self.cookiejar, agent=self.user_agent)
+                count += 1
+                # account for the possibility of infinite redirects
+                if count == 20:
+                    break
             # handle the captcha
             # check needed because the redirect could result in an error
             # will properly exit the loop and fall to the error check below
@@ -76,8 +81,8 @@ class GoogleWebMixin(object):
             _payload = {'captcha':raw_input('[CAPTCHA] Answer: ')}
             # temporary captcha file removed on close
         # extract the form elements for the capctah answer request
-        form = tree.xpath('//form[@action="CaptchaRedirect"]')[0]
-        for x in ['continue', 'id', 'submit']:
+        form = tree.xpath('//form[@action="index"]')[0]
+        for x in ['q', 'continue', 'submit']:
             _payload[x] = form.xpath('//input[@name="%s"]/@value' % (x))[0]
         # send the captcha answer
-        return self.request('https://ipv4.google.com/sorry/CaptchaRedirect', payload=_payload, cookiejar=self.cookiejar, agent=self.user_agent)
+        return self.request('https://ipv4.google.com/sorry/index', payload=_payload, cookiejar=self.cookiejar, agent=self.user_agent)

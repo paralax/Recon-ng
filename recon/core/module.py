@@ -26,18 +26,46 @@ class BaseModule(framework.Framework):
         framework.Framework.__init__(self, params)
         self.options = framework.Options()
         # register a data source option if a default query is specified in the module
-        if 'query' in self.meta:
-            self._default_source = self.meta['query']
+        if self.meta.get('query'):
+            self._default_source = self.meta.get('query')
             self.register_option('source', 'default', True, 'source of input (see \'show info\' for details)')
         # register all other specified options
-        if 'options' in self.meta:
-            for option in self.meta['options']:
+        if self.meta.get('options'):
+            for option in self.meta.get('options'):
                 self.register_option(*option)
+        # register any required keys
+        if self.meta.get('required_keys'):
+            self.keys = {}
+            for key in self.meta.get('required_keys'):
+                # add key to the database
+                self._query_keys('INSERT OR IGNORE INTO keys (name) VALUES (?)', (key,))
+                # migrate the old key if needed
+                self._migrate_key(key)
+                # add key to local keys dictionary
+                # could fail to load on exception here to prevent loading modules
+                # without required keys, but would need to do it in a separate loop
+                # so that all keys get added to the database first. for now, the
+                # framework will warn users of the missing key, but allow the module
+                # to load.
+                self.keys[key] = self.get_key(key)
+                if not self.keys.get(key):
+                    self.error('\'%s\' key not set. %s module will likely fail at runtime. See \'keys add\'.' % (key, self._modulename.split('/')[-1]))
         self._reload = 0
 
     #==================================================
     # SUPPORT METHODS
     #==================================================
+
+    def _migrate_key(self, key):
+        '''migrate key from old .dat file'''
+        key_path = os.path.join(self._home, 'keys.dat')
+        if os.path.exists(key_path):
+            try:
+                key_data = json.loads(open(key_path, 'rb').read())
+                if key_data.get(key):
+                    self.add_key(key, key_data.get(key))
+            except:
+                self.error('Corrupt key file. Manual migration of \'%s\' required.' % (key))
 
     def ascii_sanitize(self, s):
         return ''.join([char for char in s if ord(char) in [10,13] + range(32, 126)])
@@ -158,10 +186,9 @@ class BaseModule(framework.Framework):
             sources = open(params).read().split()
         else:
             sources = [params]
-        source = [self.to_unicode(x) for x in sources]
-        if not source:
+        if not sources:
             raise framework.FrameworkException('Source contains no input.')
-        return source
+        return sources
 
     #==================================================
     # 3RD PARTY API METHODS
@@ -169,10 +196,9 @@ class BaseModule(framework.Framework):
 
     def get_explicit_oauth_token(self, resource, scope, authorize_url, access_url):
         token_name = resource+'_token'
-        try:
-            return self.get_key(token_name)
-        except:
-            pass
+        token = self.get_key(token_name)
+        if token:
+            return token
         import urllib
         import webbrowser
         import socket
@@ -208,10 +234,9 @@ class BaseModule(framework.Framework):
 
     def get_twitter_oauth_token(self):
         token_name = 'twitter_token'
-        try:
-            return self.get_key(token_name)
-        except:
-            pass
+        token = self.get_key(token_name)
+        if token:
+            return token
         twitter_key = self.get_key('twitter_api')
         twitter_secret = self.get_key('twitter_secret')
         url = 'https://api.twitter.com/oauth2/token'
@@ -234,14 +259,43 @@ class BaseModule(framework.Framework):
         payload['hmac'] = hm.hexdigest()
         return payload
 
-    def search_twitter_api(self, payload):
+    def get_pwnedlist_leak(self, leak_id):
+        # check if the leak has already been retrieved
+        leak = self.query('SELECT * FROM leaks WHERE leak_id=?', (leak_id,))
+        if leak:
+            leak = dict(zip([x[0] for x in self.get_columns('leaks')], leak[0]))
+            del leak['module']
+            return leak
+        # set up the API call
+        key = self.get_key('pwnedlist_api')
+        secret = self.get_key('pwnedlist_secret')
+        url = 'https://api.pwnedlist.com/api/1/leaks/info'
+        base_payload = {'leakId': leak_id}
+        payload = self.build_pwnedlist_payload(base_payload, 'leaks.info', key, secret)
+        # make the request
+        resp = self.request(url, payload=payload)
+        if resp.status_code != 200:
+            self.error('Error retrieving leak data.\n%s' % (resp.text))
+            return
+        leak = resp.json['leaks'][0]
+        # normalize the leak for storage
+        normalized_leak = {}
+        for item in leak:
+            value = leak[item]
+            if type(value) == list:
+                value = ', '.join(value)
+            normalized_leak[item] = value
+        return normalized_leak
+
+    def search_twitter_api(self, payload, limit=False):
         headers = {'Authorization': 'Bearer %s' % (self.get_twitter_oauth_token())}
         url = 'https://api.twitter.com/1.1/search/tweets.json'
-        # count causes inconsistent results when applied
-        #payload['count'] = 50 # api stops paginating at count=90
         results = []
         while True:
             resp = self.request(url, payload=payload, headers=headers)
+            if limit:
+                # app auth rate limit for search/tweets is 450/15min
+                time.sleep(2)
             jsonobj = resp.json
             for item in ['error', 'errors']:
                 if item in jsonobj:
@@ -259,7 +313,7 @@ class BaseModule(framework.Framework):
         url = 'https://api.shodan.io/shodan/host/search'
         payload = {'query': query, 'key': api_key}
         results = []
-        cnt = 1
+        cnt = 0
         page = 1
         self.verbose('Searching Shodan API for: %s' % (query))
         while True:
@@ -272,38 +326,44 @@ class BaseModule(framework.Framework):
                 break
             # add new results
             results.extend(resp.json['matches'])
-            # check limit
+            # increment and check the limit
+            cnt += 1
             if limit == cnt:
                 break
-            cnt += 1
             # next page
             page += 1
             payload['page'] = page
         return results
 
     def search_bing_api(self, query, limit=0):
-        api_key = self.get_key('bing_api')
-        url = 'https://api.datamarket.azure.com/Bing/Search/Web'
-        payload = {'Query': "'%s'" % (query), '$format': 'json'}
+        url = 'https://api.cognitive.microsoft.com/bing/v5.0/search'
+        payload = {'q': query, 'count': 50, 'offset': 0, 'responseFilter': 'WebPages'}
+        headers = {'Ocp-Apim-Subscription-Key': self.get_key('bing_api')}
         results = []
-        cnt = 1
+        cnt = 0
         self.verbose('Searching Bing API for: %s' % (query))
         while True:
-            resp = None
-            resp = self.request(url, payload=payload, auth=(api_key, api_key))
+            resp = self.request(url, payload=payload, headers=headers)
             if resp.json == None:
                 raise framework.FrameworkException('Invalid JSON response.\n%s' % (resp.text))
-            # add new results
-            if 'results' in resp.json['d']:
-                results.extend(resp.json['d']['results'])
-            # check limit
+            #elif 'error' in resp.json:
+            elif resp.status_code == 401:
+                raise framework.FrameworkException('%s: %s' % (resp.json['statusCode'], resp.json['message']))
+            # add new results, or if there's no more, return what we have...
+            if 'webPages' in resp.json:
+                results.extend(resp.json['webPages']['value'])
+            else:
+                return results
+            # increment and check the limit
+            cnt += 1
             if limit == cnt:
                 break
-            cnt += 1
             # check for more pages
-            if not '__next' in resp.json['d']:
+            # https://msdn.microsoft.com/en-us/library/dn760787.aspx
+            if payload['offset'] > (resp.json['webPages']['totalEstimatedMatches'] - payload['count']):
                 break
-            payload['$skip'] = resp.json['d']['__next'].split('=')[-1]
+            # set the payload for the next request
+            payload['offset'] += payload['count']
         return results
 
     def search_google_api(self, query, limit=0):
@@ -312,20 +372,19 @@ class BaseModule(framework.Framework):
         url = 'https://www.googleapis.com/customsearch/v1'
         payload = {'alt': 'json', 'prettyPrint': 'false', 'key': api_key, 'cx': cse_id, 'q': query}
         results = []
-        cnt = 1
+        cnt = 0
         self.verbose('Searching Google API for: %s' % (query))
         while True:
-            resp = None
             resp = self.request(url, payload=payload)
             if resp.json == None:
                 raise framework.FrameworkException('Invalid JSON response.\n%s' % (resp.text))
             # add new results
             if 'items' in resp.json:
                 results.extend(resp.json['items'])
-            # check limit
+            # increment and check the limit
+            cnt += 1
             if limit == cnt:
                 break
-            cnt += 1
             # check for more pages
             if not 'nextPage' in resp.json['queries']:
                 break
@@ -334,9 +393,14 @@ class BaseModule(framework.Framework):
 
     def search_github_api(self, query):
         self.verbose('Searching Github for: %s' % (query))
-        return self.query_github_api(endpoint='/search/code', payload={'q': query})
+        results = self.query_github_api(endpoint='/search/code', payload={'q': query})
+        # reduce the nested lists of search results and return
+        results = [result['items'] for result in results]
+        return [x for sublist in results for x in sublist]
 
-    def query_github_api(self, endpoint, payload={}):
+    def query_github_api(self, endpoint, payload={}, options={}):
+        opts = {'max_pages': None}
+        opts.update(options)
         headers = {'Authorization': 'token %s' % (self.get_key('github_api'))}
         base_url = 'https://api.github.com'
         url = base_url + endpoint
@@ -353,16 +417,13 @@ class BaseModule(framework.Framework):
                 if resp.status_code != 404:
                     self.error('Message from Github: %s' % (resp.json['message']))
                 break
-            # enumerate resuls
-            # handle Search API differently than others
-            if endpoint.lower().startswith('/search/'):
-                results += resp.json['items']
-            elif endpoint.lower().startswith('/gists/'):
-                results += [x for x in resp.json['files']]
-            else:
-                results += resp.json
+            # some APIs return lists, and others a single dictionary
+            method = 'extend'
+            if type(resp.json) == dict:
+                method = 'append'
+            getattr(results, method)(resp.json)
             # paginate
-            if 'link' in resp.headers and 'rel="next"' in resp.headers['link']:
+            if 'link' in resp.headers and 'rel="next"' in resp.headers['link'] and (opts['max_pages'] is None or page < opts['max_pages']):
                 page += 1
                 continue
             break
@@ -423,8 +484,11 @@ class BaseModule(framework.Framework):
         print('')
         # meta info
         for item in ['name', 'path', 'author', 'version']:
-            if item in self.meta:
+            if self.meta.get(item):
                 print('%s: %s' % (item.title().rjust(10), self.meta[item]))
+        # required keys
+        if self.meta.get('required_keys'):
+            print('%s: %s' % ('keys'.title().rjust(10), ', '.join(self.meta.get('required_keys'))))
         print('')
         # description
         if 'description' in self.meta:

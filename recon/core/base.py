@@ -39,40 +39,6 @@ __builtin__._print = print
 # override the builtin print function with the new print function
 __builtin__.print = spool_print
 
-KEY_RESOURCES = [
-    'bing_api',
-    'builtwith_api',
-    'censysio_id',
-    'censysio_secret',
-    'facebook_api',
-    'facebook_password',
-    'facebook_secret',
-    'facebook_username',
-    'flickr_api',
-    'fullcontact_api',
-    'google_api',
-    'google_cse',
-    'github_api',
-    'hashes_api',
-    'instagram_api',
-    'instagram_secret',
-    'instagram_token',
-    'ipinfodb_api',
-    'jigsaw_api',
-    'jigsaw_password',
-    'jigsaw_username',
-    'linkedin_api',
-    'linkedin_secret',
-    'linkedin_token',
-    'pwnedlist_api',
-    'pwnedlist_iv',
-    'pwnedlist_secret',
-    'shodan_api',
-    'twitter_api',
-    'twitter_secret',
-    'twitter_token',
-]
-
 #=================================================
 # BASE CLASS
 #=================================================
@@ -142,13 +108,12 @@ class Recon(framework.Framework):
             pass
 
     def _init_global_options(self):
-        self.register_option('debug', False, True, 'enable debugging output')
         self.register_option('nameserver', '8.8.8.8', True, 'nameserver for DNS interrogation')
         self.register_option('proxy', None, False, 'proxy server (address:port)')
         self.register_option('threads', 10, True, 'number of threads (where applicable)')
         self.register_option('timeout', 10, True, 'socket timeout (seconds)')
         self.register_option('user-agent', 'Recon-ng/v%s' % (__version__.split('.')[0]), True, 'user-agent string')
-        self.register_option('verbose', True, True, 'enable verbose output')
+        self.register_option('verbosity', 1, True, 'verbosity level (0 = minimal, 1 = verbose, 2 = debug)')
 
     def _init_home(self):
         self._home = framework.Framework._home = os.path.join(os.path.expanduser('~'), '.recon-ng')
@@ -157,19 +122,6 @@ class Recon(framework.Framework):
             os.makedirs(self._home)
         # initialize keys database
         self._query_keys('CREATE TABLE IF NOT EXISTS keys (name TEXT PRIMARY KEY, value TEXT)')
-        # populate key names
-        for name in KEY_RESOURCES:
-            self._query_keys('INSERT OR IGNORE INTO keys (name) VALUES (?)', (name,))
-        # migrate keys from old .dat file
-        key_path = os.path.join(self._home, 'keys.dat')
-        if os.path.exists(key_path):
-            try:
-                key_data = json.loads(open(key_path, 'rb').read())
-                for key in key_data:
-                    self.add_key(key, key_data[key])
-                os.remove(key_path)
-            except:
-                self.error('Corrupt key file. Manual migration required.')
 
     def _load_modules(self):
         self.loaded_category = {}

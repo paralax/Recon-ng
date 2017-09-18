@@ -7,6 +7,7 @@ class Module(BaseModule):
         'name': 'LinkedIn Authenticated Contact Enumerator',
         'author': 'Tim Tomes (@LaNMaSteR53)',
         'description': 'Harvests contacts from the LinkedIn.com API using an authenticated connections network. Updates the \'contacts\' table with the results.',
+        'required_keys': ['linkedin_api', 'linkedin_secret'],
         'query': 'SELECT DISTINCT company FROM companies WHERE company IS NOT NULL',
     }
 
@@ -51,7 +52,6 @@ class Module(BaseModule):
                         title = self.html_unescape(contact['headline'])
                         region = re.sub('(?:Greater\s|\sArea)', '', self.html_unescape(contact['location']['name']).title())
                         country = self.html_unescape(contact['location']['country']['code']).upper()
-                        self.output('%s %s - %s (%s - %s)' % (fname, lname, title, region, country))
                         self.add_contacts(first_name=fname, last_name=lname, title=title, region=region, country=country)
                 if not '_start' in jsonobj['people']:
                     break

@@ -9,6 +9,7 @@ class Module(BaseModule):
         'name': 'Hashes.org Hash Lookup',
         'author': 'Tim Tomes (@LaNMaSteR53) and Mike Lisi (@MikeCodesThings)',
         'description': 'Uses the Hashes.org API to perform a reverse hash lookup. Updates the \'credentials\' table with the positive results.',
+        'required_keys': ['hashes_api'],
         'comments': (
             'Hash types supported: MD5, MD4, NTLM, LM, DOUBLEMD5, TRIPLEMD5, MD5SHA1, SHA1, MYSQL5, SHA1MD5, DOUBLESHA1, RIPEMD160',
         ),
@@ -16,7 +17,7 @@ class Module(BaseModule):
     }
 
     def module_run(self, hashes):
-        api_key = self.get_key('hashes_api')
+        api_key = self.keys.get('hashes_api')
         url = 'https://hashes.org/api.php'
         payload = {'act':'REQUEST', 'key':api_key}
         for hashstr in hashes:
@@ -30,7 +31,8 @@ class Module(BaseModule):
             elif jsonobj['REQUEST'] != 'FOUND':
                 self.verbose('%s => %s' % (hashstr, jsonobj['REQUEST'].lower()))
             else:
-                plaintext = jsonobj[hashstr]['plain']
-                hashtype = jsonobj[hashstr]['algorithm']
+                # hashes.org converts the hash to lowercase
+                plaintext = jsonobj[hashstr.lower()]['plain']
+                hashtype = jsonobj[hashstr.lower()]['algorithm']
                 self.alert('%s (%s) => %s' % (hashstr, hashtype, plaintext))
                 self.query('UPDATE credentials SET password=\'%s\', type=\'%s\' WHERE hash=\'%s\'' % (plaintext, hashtype, hashstr))

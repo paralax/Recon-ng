@@ -7,6 +7,7 @@ class Module(BaseModule):
         'name': 'BuiltWith Enumerator',
         'author': 'Tim Tomes (@LaNMaSteR53)',
         'description': 'Leverages the BuiltWith API to identify hosts, technologies, and contacts associated with a domain.',
+        'required_keys': ['builtwith_api'],
         'query': 'SELECT DISTINCT domain FROM domains WHERE domain IS NOT NULL',
         'options': (
             ('show_all', True, True, 'display technologies'),
@@ -14,7 +15,7 @@ class Module(BaseModule):
     }
 
     def module_run(self, domains):
-        key = self.get_key('builtwith_api')
+        key = self.keys.get('builtwith_api')
         url = ' http://api.builtwith.com/v5/api.json'
         title = 'BuiltWith contact'
         for domain in domains:
@@ -29,13 +30,11 @@ class Module(BaseModule):
                 emails = result['Meta']['Emails']
                 if emails is None: emails = []
                 for email in emails:
-                    self.output('Email: '+email)
                     self.add_contacts(first_name=None, last_name=None, title=title, email=email)
                 # extract and add names to contacts
                 names = result['Meta']['Names']
                 if names is None: names = []
                 for name in names:
-                    self.output('Name: '+name['Name'])
                     fname, mname, lname = self.parse_name(name['Name'])
                     self.add_contacts(first_name=fname, middle_name=mname, last_name=lname, title=title)
                 # extract and consolidate hosts and associated technology data
@@ -51,7 +50,6 @@ class Module(BaseModule):
                     # *** might domain integrity issues here ***
                     domain = '.'.join(host.split('.')[-2:])
                     if domain != host:
-                        self.output('Host: '+host)
                         self.add_hosts(host)
                 # process hosts and technology data
                 if self.options['show_all']:
@@ -59,8 +57,8 @@ class Module(BaseModule):
                         self.heading(host, level=0)
                         # display technologies
                         if data[host]:
-                            print(self.ruler*50)
+                            self.output(self.ruler*50)
                         for item in data[host]:
                             for tag in item:
                                 self.output('%s: %s' % (tag, textwrap.fill(self.to_unicode_str(item[tag]), 100, initial_indent='', subsequent_indent=self.spacer*2)))
-                            print(self.ruler*50)
+                            self.output(self.ruler*50)

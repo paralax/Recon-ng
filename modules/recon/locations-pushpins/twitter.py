@@ -8,6 +8,7 @@ class Module(BaseModule):
         'name': 'Twitter Geolocation Search',
         'author': 'Tim Tomes (@LaNMaSteR53)',
         'description': 'Searches Twitter for media in the specified proximity to a location.',
+        'required_keys': ['twitter_api', 'twitter_secret'],
         'query': 'SELECT DISTINCT latitude || \',\' || longitude FROM locations WHERE latitude IS NOT NULL AND longitude IS NOT NULL',
         'options': (
             ('radius', 1, True, 'radius in kilometers'),
@@ -20,7 +21,7 @@ class Module(BaseModule):
         for point in points:
             self.heading(point, level=0)
             self.output('Collecting data for an unknown number of tweets...')
-            results = self.search_twitter_api({'q':'', 'geocode': '%s,%dkm' % (point, rad)})
+            results = self.search_twitter_api({'q':'', 'geocode': '%s,%fkm' % (point, rad)})
             for tweet in results:
                 if not tweet['geo']:
                     continue

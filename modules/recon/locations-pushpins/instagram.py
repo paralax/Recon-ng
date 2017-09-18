@@ -9,6 +9,7 @@ class Module(BaseModule):
         'name': 'Instagram Geolocation Search',
         'author': 'Nathan Malcolm (@SintheticLabs) and Tim Tomes (@LaNMaSteR53)',
         'description': 'Searches Instagram for media in the specified proximity to a location.',
+        'required_keys': ['instagram_api', 'instagram_secret'],
         'comments': (
             'Radius must be greater than zero and no more than 5 kilometers (5000 meters).',
         ),
@@ -21,7 +22,7 @@ class Module(BaseModule):
     def get_instagram_access_token(self):
         return self.get_explicit_oauth_token(
             'instagram',
-            'basic',
+            'basic public_content',
             'https://instagram.com/oauth/authorize/',
             'https://api.instagram.com/oauth/access_token'
         )
@@ -49,25 +50,31 @@ class Module(BaseModule):
                         continue
                     self.error(jsonobj['meta']['error_message'])
                     break
-                if not processed: self.output('Collecting data for an unknown number of photos...')
+                if not processed:
+                    self.output('Collecting data for an unknown number of photos...')
                 for item in jsonobj['data']:
                     latitude = item['location']['latitude']
                     longitude = item['location']['longitude']
-                    if not all((latitude, longitude)): continue
+                    if not all((latitude, longitude)):
+                        continue
                     source = 'Instagram'
                     screen_name = item['user']['username']
                     profile_name = item['user']['full_name']
                     profile_url = 'http://instagram.com/%s' % screen_name
                     media_url = item['images']['standard_resolution']['url']
                     thumb_url = item['images']['thumbnail']['url']
-                    try: message = item['caption']['text']
-                    except: message = ''
-                    try: time = datetime.fromtimestamp(float(item['created_time']))
-                    except ValueError: time = datetime(1970, 1, 1)
+                    try:
+                        message = item['caption']['text']
+                    except:
+                        message = ''
+                    try:
+                        time = datetime.fromtimestamp(float(item['created_time']))
+                    except ValueError:
+                        time = datetime(1970, 1, 1)
                     self.add_pushpins(source, screen_name, profile_name, profile_url, media_url, thumb_url, message, latitude, longitude, time)
                 processed += len(jsonobj['data'])
                 self.verbose('%s photos processed.' % (processed))
                 if len(jsonobj['data']) < 20:
-                    print(len(jsonobj['data']))
+                    self.verbose(len(jsonobj['data']))
                     break
                 payload['max_timestamp'] = jsonobj['data'][19]['created_time']

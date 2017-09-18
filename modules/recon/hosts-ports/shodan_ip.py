@@ -7,6 +7,7 @@ class Module(BaseModule):
         'name': 'Shodan IP Enumerator',
         'author': 'Tim Tomes (@LaNMaSteR53) and Matt Pluckett (@t3lc0)',
         'description': 'Harvests port information from the Shodan API by using the \'ip\' search operator. Updates the \'ports\' table with the results.',
+        'required_keys': ['shodan_api'],
         'query': 'SELECT DISTINCT ip_address FROM hosts WHERE ip_address IS NOT NULL',
         'options': (
             ('limit', 1, True, 'limit number of api requests per input source (0 = unlimited)'),
@@ -25,5 +26,4 @@ class Module(BaseModule):
                 if not host['hostnames']:
                     host['hostnames'] = [None]
                 for hostname in host['hostnames']:
-                    self.output('%s (%s) - %s' % (address, hostname or 'Unknown', port))
                     self.add_ports(ip_address=address, port=port, host=hostname)
