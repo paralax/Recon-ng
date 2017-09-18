@@ -7,4 +7,5 @@ class ResolverMixin(object):
         resolver = dns.resolver.get_default_resolver()
         resolver.nameservers = [self._global_options['nameserver']]
         resolver.lifetime = 3
+        resolver.domain = dns.name.Name(("",))
         return resolver
