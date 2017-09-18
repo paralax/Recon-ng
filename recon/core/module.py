@@ -16,6 +16,8 @@ import urlparse
 # framework libs
 from recon.core import framework
 
+import requests
+
 #=================================================
 # MODULE CLASS
 #=================================================
@@ -429,6 +431,23 @@ class BaseModule(framework.Framework):
             break
         return results
 
+    def query_passivetotal_api(self, path, query):
+        username = self.get_key('passivetotal_username')
+        key = self.get_key('passivetotal_secret')
+        auth = (username, key)
+        base_url = 'https://api.passivetotal.org'
+        url = base_url + path
+        data = {'query': query}
+        response = requests.get(url, auth=auth, json=data)
+        return response.json()
+
+    def get_passivetotal_subdomains(self, query):
+        pdns_results = self.query_passivetotal_api('/v2/enrichment/subdomains', query)
+        results = []
+        for subdomain in pdns_results['subdomains']:
+            results.append(subdomain + '.' + query)
+        return results
+        
     #==================================================
     # REQUEST METHODS
     #==================================================
