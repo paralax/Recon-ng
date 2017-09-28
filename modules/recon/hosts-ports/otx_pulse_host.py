@@ -16,7 +16,7 @@ class Module(BaseModule):
             jsonobj = resp.json
             if jsonobj.has_key('Error'):
                 self.error(jsonobj['Error'])
-                return
+                continue
             for x in jsonobj['data']:
                 if 'certificate subject' in x['key']:
                     key = x[u'key']
