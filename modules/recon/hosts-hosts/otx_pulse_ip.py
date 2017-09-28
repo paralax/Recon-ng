@@ -17,7 +17,7 @@ class Module(BaseModule):
             for hostname in [x['hostname'] for x in jsonobj['passive_dns']]:
                 self.add_hosts(hostname, host)
                 self.output('\'%s\' successfully found.' % (hostname))
-            
+
             url = 'https://otx.alienvault.com/api/v1/indicators/IPv4/{0}/url_list'.format(host)
             resp = self.request(url)
             jsonobj = resp.json
@@ -26,6 +26,3 @@ class Module(BaseModule):
                 self.output('\'%s\' successfully found.' % (url['domain']))
                 self.add_hosts(url['hostname'], host)
                 self.output('\'%s\' successfully found.' % (url['hostname']))
-                
-                
-                
