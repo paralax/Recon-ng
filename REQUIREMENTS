@@ -10,3 +10,4 @@ PyPDF2==1.25.1
 BeautifulSoup
 flask
 unicodecsv
+requests
